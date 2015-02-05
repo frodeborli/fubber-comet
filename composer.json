@@ -1,0 +1,28 @@
+{
+    "name": "fubber/comet",
+    "description": "An event based long-polling comet server build using asynchronous PHP with React",
+    "keywords": ["comet","websockets","long-polling","php"],
+    "license": "GPL-2.0",
+    "support": {
+        "issues": "https://github.com/frodeborli/fubber-comet/issues",
+        "wiki": "https://github.com/frodeborli/fubber-comet/wiki"
+    },
+    "require": {
+        "fubber/reactor": "*"
+    },
+    "require-dev": {
+    },
+    "authors": [
+        {
+            "name": "Frode Borli",
+            "email": "frodeborli@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {"Fubber\\Comet\\": "src/"}
+    },
+    "autoload-dev": {
+        "psr-4": {"": "classes/"}
+    }
+}
