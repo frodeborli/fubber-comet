@@ -5,7 +5,6 @@ use \Fubber\Reactor\Controller;
 
 class SubscriberController extends Controller {
 	public function get($request, $response) {
-echo "GET REQUEST\n";
 		// We're getting a new subscriber! Yay!
 
 		$query = $request->getQuery();
@@ -14,9 +13,9 @@ echo "GET REQUEST\n";
 			$response->writeHead(200, array('Content-Type' => 'text/plain'));
 			$response->end('No channels specified. Specify them using the c[] query parameter!');
 		} else {
-			// Spawn off a Subscriber instance. It will be registered in MessageBroker and disposed off from there.
+			// Spawn off a Subscriber instance. It will be registered in Server and disposed off from there.
 			$subscriptionHandler = new SubscriptionHandler($request, $response, $query['c']);
-			MessageBroker::getInstance()->addSubscriber($subscriptionHandler);
+			Server::getInstance()->addSubscriber($subscriptionHandler);
 		}
 	}
 }

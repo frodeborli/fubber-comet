@@ -3,7 +3,7 @@ namespace Fubber\Comet;
 
 use \Fubber\Reactor\Host;
 
-class MessageBroker {
+class Server extends \Fubber\Reactor\Server {
 
 	protected static $instance;
 
@@ -17,38 +17,50 @@ class MessageBroker {
 	public $subscribers = array();
 	public $tagMap = array();
 	public $readyMap = array();
+    public $host;
 
 	protected $subscriberIndex = 0;
-	protected $insertMessageQuery;
 	protected $messageIndex = 0;
 	protected $buffer = array();
 	protected $bufferLength = 0;
 	protected $bufferFirst = NULL;
 	protected $bufferLast = NULL;
+    protected $insertMessageQuery, $bufferFillQuery, $pollQuery, $purgeQuery;
 
-	public function __construct($config) {
-		$this->pdo = new PDO($config->database->type.':host='.$config->database->host.';dbname='.$config->database->name, $config->database->user, $config->database->password);
+	public function __construct($host, $config) {
+        self::$instance = $this;
+        $this->host = $host;
 
+        // Get access to the database
+        if(!isset($config->database))
+            $config->database = 'master';
+
+        $this->pdo = $this->host->getDatabaseConnection($config->database);
+        $this->initDatabase();
+
+   		$this->host->getLoop()->addPeriodicTimer(0.01, array($this, 'send'));
+   		$this->host->getLoop()->addPeriodicTimer(1, array($this, 'cleanup'));
+        $this->host->getLoop()->addPeriodicTimer(0.02, array($this, 'pollDatabase'));
+   		$this->host->getLoop()->addPeriodicTimer(600, array($this, 'purgeDatabase'));
+
+		$this->bufferFillQuery->execute();
+		foreach($this->bufferFillQuery->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+			$this->messageIndex = $row['id'];
+			$this->queueMessage($row['id'], $row['ts'], explode(" ", $row['tags']), unserialize($row['payload']));
+		}
+
+        $this->host->addRoute('/ws/subscribe', new SubscriberController());
+        $this->host->addRoute('/ws/push', new PushController());
+	}
+
+    public function initDatabase() {
 		$this->pdo->exec('SET NAMES utf8');
-
 		$this->pdo->exec('CREATE TABLE messages (id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, ts TIMESTAMP, tags TEXT, payload LONGBLOB) DEFAULT CHARACTER SET utf8');
-
 		$this->insertMessageQuery = $this->pdo->prepare('INSERT INTO messages (ts, tags, payload) VALUES (NOW(), ?, ?)');
 		$this->bufferFillQuery = $this->pdo->prepare('(SELECT id, UNIX_TIMESTAMP(ts) AS ts, tags, payload FROM messages ORDER BY id DESC LIMIT 1000) ORDER BY id');
 		$this->pollQuery = $this->pdo->prepare('SELECT id, UNIX_TIMESTAMP(ts) AS ts, tags, payload FROM messages WHERE id > ? ORDER BY id LIMIT 100');
 		$this->purgeQuery = $this->pdo->prepare('DELETE FROM messages WHERE ts < DATE_SUB(NOW(), INTERVAL 1 HOUR)');
-
-		Host::$instance->getLoop()->addPeriodicTimer(0.01, array($this, 'send'));
-		Host::$instance->getLoop()->addPeriodicTimer(1, array($this, 'cleanup'));
-		Host::$instance->getLoop()->addPeriodicTimer(0.02, array($this, 'pollDatabase'));
-		Host::$instance->getLoop()->addPeriodicTimer(600, array($this, 'purgeDatabase'));
-
-		$this->bufferFillQuery->execute();
-		foreach($this->bufferFillQuery->fetchAll(PDO::FETCH_ASSOC) as $row) {
-			$this->messageIndex = $row['id'];
-			$this->queueMessage($row['id'], $row['ts'], explode(" ", $row['tags']), unserialize($row['payload']));
-		}
-	}
+    }
 
 	public function purgeDatabase() {
 		$this->purgeQuery->execute();
@@ -57,7 +69,7 @@ class MessageBroker {
 	public function pollDatabase() {
 		$this->pollQuery->execute(array($this->messageIndex));
 
-		foreach($this->pollQuery->fetchAll(PDO::FETCH_ASSOC) as $row) {
+		foreach($this->pollQuery->fetchAll(\PDO::FETCH_ASSOC) as $row) {
 			$this->messageIndex = $row['id'];
 			$this->queueMessage($row['id'], $row['ts'], explode(" ", $row['tags']), unserialize($row['payload']));
 		}
@@ -141,7 +153,7 @@ class MessageBroker {
 	/**
 	*	Add a subscriber
 	*/
-	public function addSubscriber(IMessageSubscriber $subscriber) {
+	public function addSubscriber(MessageSubscriberInterface $subscriber) {
 		$subscriber->subscriberId = $this->subscriberIndex++;
 		$this->subscribers[$subscriber->subscriberId] = $subscriber;
 		foreach($subscriber->tags as $tag) {
@@ -176,7 +188,7 @@ class MessageBroker {
 			} else {
 				// Fetch messages from the database
 				$this->pollQuery->execute(array($query['lastId']));
-				foreach($this->pollQuery->fetchAll(PDO::FETCH_ASSOC) as $row) {
+				foreach($this->pollQuery->fetchAll(\PDO::FETCH_ASSOC) as $row) {
 					$tags = array_flip(explode(" ", $row['tags']));
 					foreach($subscriber->tags as $tag) {
 						if(isset($tags[$tag])) {
