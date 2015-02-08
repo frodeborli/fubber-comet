@@ -7,6 +7,10 @@ class ResponseWriter {
 		if(is_subclass_of($data, '\Fubber\Comet\HttpException'))
 			$httpCode = $data->getCode();
 
+        $headers = array();
+        $rHeaders = $request->getHeaders();
+        if(isset($rHeaders['Origin']))
+            $headers['Access-Control-Allow-Origin'] = $rHeaders['Origin'];
 
 		$query = $request->getQuery();
 
@@ -14,16 +18,19 @@ class ResponseWriter {
 
 		switch($query['format']) {
 			case 'php' :
-				$response->writeHead($httpCode, array('Content-Type' => 'text/plain'));
+                $headers['Content-Type'] = 'text/plain';
+				$response->writeHead($httpCode, $headers);
 				$response->end(serialize($data));
 				break;
 			case 'json' :
 			default :
 				if(isset($query['cb'])) {
-					$response->writeHead($httpCode, array('Content-Type' => 'application/javascript'));
+                    $headers['Content-Type'] = 'application/javascript';
+	    			$response->writeHead($httpCode, $headers);
 					$response->end($query['cb'].'('.json_encode($data).');');
 				} else {
-					$response->writeHead($httpCode, array('Content-Type' => 'application/json'));
+                    $headers['Content-Type'] = 'application/json';
+    				$response->writeHead($httpCode, $headers);
 					$response->end(json_encode($data));
 				}
 				break;

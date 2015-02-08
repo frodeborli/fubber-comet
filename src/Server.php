@@ -51,6 +51,7 @@ class Server extends \Fubber\Reactor\Server {
 
         $this->host->addRoute('/ws/subscribe', new SubscriberController());
         $this->host->addRoute('/ws/push', new PushController());
+        $this->host->addRoute('/js/comet/*', new FileController(array("root" => dirname(__DIR__).'/files/js/comet', "url" => "/js/comet"))); /* */
 	}
 
     public function initDatabase() {
