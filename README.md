@@ -1,5 +1,7 @@
 # fubber-comet
 
+> **Abandoned.** This project has not been maintained since 2015 and is kept for reference only. It will not receive fixes or support.
+
 A simple to use comet (long-polling) server, serving old-school json and jsonp.
 
 ## Installation
